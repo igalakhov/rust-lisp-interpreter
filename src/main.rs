@@ -4,7 +4,8 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 
-fn main() {
+#[tokio::main]
+pub async fn main() {
     // main input/output loop
     let mut rl = Editor::<()>::new();
 
