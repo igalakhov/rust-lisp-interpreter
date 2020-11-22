@@ -4,6 +4,8 @@ extern crate rustyline;
 mod reader;
 mod types;
 mod printer;
+mod eval;
+mod core;
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
@@ -14,6 +16,8 @@ pub async fn main() {
 
     // main input/output loop
     let mut rl = Editor::<()>::new();
+
+    let core_env = core::make_core_env();
 
     loop {
         let readline = rl.readline("user> ");
@@ -26,7 +30,14 @@ pub async fn main() {
 
                 match reader::read_str(line.as_str()) {
                     Ok(val) => {
-                        printer::print_val(&val);
+                        match eval::eval(val, &core_env) {
+                            Ok(res) => {
+                                printer::print_val(&res);
+                            }
+                            Err(why) => {
+                                println!("Error during evaluation: {:?}", why);
+                            }
+                        }
                     }
                     Err(why) => {
                         println!("Error while parsing: {:?}", why);

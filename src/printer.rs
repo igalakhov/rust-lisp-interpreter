@@ -31,6 +31,9 @@ pub fn to_string(val: &LangVal) -> String {
                 format!("{} {}", k, to_string(v))
             }).collect::<Vec<String>>().join(" "))
         }
+        LangVal::Function(_) => {
+            "<function>".to_string()
+        }
         LangVal::WithSpecial((name, val)) => {
             format!("({} {})", name, to_string(val))
         }
