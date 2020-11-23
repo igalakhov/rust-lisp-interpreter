@@ -1,5 +1,6 @@
 use crate::types::{LangVal, FullEnv, Result};
 use crate::eval::eval;
+use itertools::Itertools;
 
 fn add(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     let mut res: f64 = 0.0;
@@ -119,7 +120,39 @@ pub fn def_excl(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
 }
 
 pub fn let_star(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
-    Err("let* not implemented")?
+    if args.len() != 2 {
+        Err(format!("let* expected 2 arguments, got {}", args.len()))?
+    }
+
+    let mut binds: Vec<LangVal> = Default::default();
+
+    match &args[0] {
+        LangVal::List(v) => {
+            binds = v.clone();
+        }
+        LangVal::Vector(v) => {
+            binds = v.clone();
+        }
+        _ => {
+            Err("First argument of let* must be list or vector")?;
+        }
+    };
+
+    if binds.len() % 2 != 0 {
+        Err("Second argument of let must have even parity")?;
+    }
+
+    env.push();
+
+    for (k, v) in binds.into_iter().tuples() {
+        def_excl(vec![k, v], env)?;
+    }
+
+    let ret = eval(args[1].clone(), env)?;
+
+    env.pop();
+
+    Ok(ret)
 }
 
 pub fn make_core_env() -> FullEnv {

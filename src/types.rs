@@ -1,7 +1,5 @@
 use std::error::Error;
 use std::rc::Rc;
-use std::borrow::{Borrow, BorrowMut};
-use crate::types::LangVal::Function;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub type Hashmap = std::collections::HashMap<String, LangVal>;
@@ -9,6 +7,7 @@ pub type Env = std::collections::HashMap<String, LangVal>;
 pub type LangFunction = fn(Vec<LangVal>, &mut FullEnv) -> Result<LangVal>;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum LangVal {
     // definitely gonna be used
     Nil,
@@ -24,6 +23,7 @@ pub enum LangVal {
     WithSpecial((String, Rc<LangVal>))
 }
 
+#[allow(dead_code)]
 impl LangVal {
     pub fn try_function(self) -> Option<LangFunction> {
         if let LangVal::Function(v) = self { Some(v) } else { None }
@@ -40,20 +40,33 @@ impl LangVal {
 
 
 #[derive(Clone, Default)]
+#[allow(dead_code)]
 pub struct FullEnv {
     nodes: Vec<Env>,
     size: usize
 }
 
+#[allow(dead_code)]
 impl FullEnv {
 
     pub fn new() -> FullEnv {
-        let mut ret = FullEnv {
+        FullEnv {
             nodes: vec![Default::default()],
             size: 1
-        };
+        }
+    }
 
-        ret
+    pub fn push(&mut self) { // add a new "top" environment
+        self.nodes.push(Default::default());
+        self.size += 1;
+    }
+
+    pub fn pop(&mut self) { // get rid of the "top" environment
+        if self.size == 1 {
+            panic!("Cannot pop an env of size 1");
+        }
+        self.nodes.pop();
+        self.size -= 1;
     }
 
     pub fn set(&mut self, key: String, val: LangVal) {
