@@ -6,24 +6,26 @@ use crate::types::LangVal::Function;
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub type Hashmap = std::collections::HashMap<String, LangVal>;
 pub type Env = std::collections::HashMap<String, LangVal>;
+pub type LangFunction = fn(Vec<LangVal>, &mut FullEnv) -> Result<LangVal>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum LangVal {
     // definitely gonna be used
+    Nil,
     List(Vec<LangVal>),
     Vector(Vec<LangVal>),
     Number(f64),
     String(String),
     Symbol(String),
     Hashmap(Hashmap),
-    Function(fn(Vec<LangVal>) -> Result<LangVal>),
-
+    Function(LangFunction),
+    SpecialFunction(LangFunction), // functions where arguments are given in raw and unevaluated
     // quotes, etc
     WithSpecial((String, Rc<LangVal>))
 }
 
 impl LangVal {
-    pub fn try_function(self) -> Option<fn(Vec<LangVal>) -> Result<LangVal>> {
+    pub fn try_function(self) -> Option<LangFunction> {
         if let LangVal::Function(v) = self { Some(v) } else { None }
     }
     pub fn try_list(self) -> Option<Vec<LangVal>> {
@@ -37,7 +39,7 @@ impl LangVal {
 // slightly better implementation to ensure O(1) for most operations
 
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct FullEnv {
     nodes: Vec<Env>,
     size: usize

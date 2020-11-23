@@ -14,6 +14,9 @@ pub fn to_string(val: &LangVal) -> String {
     };
 
     match val {
+        LangVal::Nil => {
+            "".to_string()
+        }
         LangVal::List(vals) => {
             format!("({})", fmt(vals))
         }
@@ -33,6 +36,9 @@ pub fn to_string(val: &LangVal) -> String {
         }
         LangVal::Function(_) => {
             "<function>".to_string()
+        }
+        LangVal::SpecialFunction(_) => {
+            "<special function>".to_string()
         }
         LangVal::WithSpecial((name, val)) => {
             format!("({} {})", name, to_string(val))
