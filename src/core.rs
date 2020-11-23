@@ -1,4 +1,4 @@
-use crate::types::{LangVal, Env, Result};
+use crate::types::{LangVal, FullEnv, Result};
 
 fn add(args: Vec<LangVal>) -> Result<LangVal> {
     let mut res: f64 = 0.0;
@@ -101,14 +101,14 @@ fn divide(args: Vec<LangVal>) -> Result<LangVal> {
 }
 
 
-pub fn make_core_env() -> Env {
-    let mut ret = Env::default();
+pub fn make_core_env() -> FullEnv {
+    let mut ret = FullEnv::new();
 
     // arithmetic expressions
-    ret.insert("+".to_string(), LangVal::Function(add));
-    ret.insert("*".to_string(), LangVal::Function(multiply));
-    ret.insert("-".to_string(), LangVal::Function(subtract));
-    ret.insert("/".to_string(), LangVal::Function(divide));
+    ret.set("+".to_string(), LangVal::Function(add));
+    ret.set("*".to_string(), LangVal::Function(multiply));
+    ret.set("-".to_string(), LangVal::Function(subtract));
+    ret.set("/".to_string(), LangVal::Function(divide));
 
     ret
 }
