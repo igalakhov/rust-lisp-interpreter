@@ -17,7 +17,7 @@ pub async fn main() {
     // main input/output loop
     let mut rl = Editor::<()>::new();
 
-    let mut core_env = core::make_core_env();
+    let core_env = core::make_core_env();
 
     loop {
         let readline = rl.readline("user> ");
@@ -30,7 +30,7 @@ pub async fn main() {
 
                 match reader::read_str(line.as_str()) {
                     Ok(val) => {
-                        match eval::eval(val, &mut core_env) {
+                        match eval::eval(val, core_env.clone()) {
                             Ok(res) => {
                                 printer::print_val(&res);
                             }

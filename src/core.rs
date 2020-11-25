@@ -1,9 +1,9 @@
-use crate::types::{LangVal, FullEnv, Result};
+use crate::types::{LangVal, Result, Env, env_push, env_set};
 use crate::eval::{eval, eval_ast};
 use itertools::{Itertools, zip};
 use std::rc::Rc;
 
-fn add(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn add(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     let mut res: f64 = 0.0;
 
     for arg in args {
@@ -17,7 +17,7 @@ fn add(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     Ok(LangVal::Number(res))
 }
 
-fn multiply(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn multiply(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     let mut res: f64 = 1.0;
 
     for arg in args {
@@ -31,7 +31,7 @@ fn multiply(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     Ok(LangVal::Number(res))
 }
 
-fn subtract(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn subtract(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
 
     if args.len() == 0 {
         Err("- got too few arguments")?;
@@ -63,7 +63,7 @@ fn subtract(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     Ok(LangVal::Number(res))
 }
 
-fn divide(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn divide(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
 
     if args.len() == 0 {
         Err("/ got too few arguments")?;
@@ -103,16 +103,16 @@ fn divide(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     Ok(LangVal::Number(res))
 }
 
-fn fn_def(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_def(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     if args.len() != 2 {
         Err(format!("def! expected 2 arguments, got {}", args.len()))?
     }
 
     match &args[0] {
        LangVal::Symbol(s) => {
-           let val = eval(args[1].clone(), env)?;
+           let val = eval(args[1].clone(), env.clone())?;
 
-           env.set(s.clone(), val.clone());
+           env_set(&env, s, val.clone());
 
            Ok(val)
        }
@@ -120,7 +120,7 @@ fn fn_def(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
     }
 }
 
-fn fn_let(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_let(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     if args.len() != 2 {
         Err(format!("let* expected 2 arguments, got {}", args.len()))?
     }
@@ -140,20 +140,18 @@ fn fn_let(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
         Err("Second argument of let must have even parity")?;
     }
 
-    env.push();
+    let env = env_push(Some(env));
 
     for (k, v) in binds.into_iter().tuples() {
-        fn_def(vec![k, v], env)?;
+        fn_def(vec![k, v], env.clone())?;
     }
 
-    let ret = eval(args[1].clone(), env)?;
-
-    env.pop();
+    let ret = eval(args[1].clone(), env.clone())?;
 
     Ok(ret)
 }
 
-fn fn_do(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_do(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     let n = args.len();
 
     if n == 0 {
@@ -163,11 +161,11 @@ fn fn_do(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
     Ok(eval_ast(LangVal::List(args), env)?.try_list().unwrap()[n-1].clone())
 }
 
-fn fn_list(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn fn_list(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     Ok(LangVal::List(args))
 }
 
-fn fn_list_q(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn fn_list_q(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     if args.len() != 1 {
         Err(format!("list? expected 1 argument, got {}", args.len()))?;
     }
@@ -177,7 +175,7 @@ fn fn_list_q(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     }
 }
 
-fn fn_empty_q(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn fn_empty_q(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     if args.len() != 1 {
         Err(format!("empty? expected 1 argument, got {}", args.len()))?;
     }
@@ -187,7 +185,7 @@ fn fn_empty_q(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     }
 }
 
-fn fn_count(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
+fn fn_count(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     if args.len() != 1 {
         Err(format!("count expected 1 argument, got {}", args.len()))?;
     }
@@ -198,7 +196,7 @@ fn fn_count(args: Vec<LangVal>, _: &mut FullEnv) -> Result<LangVal> {
     }
 }
 
-fn fn_if(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_if(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     if args.len() < 2 {
         Err(format!("if expected at least 2 arguments, got {}", args.len()))?;
     }
@@ -209,20 +207,20 @@ fn fn_if(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
     let true_case = args[1].clone();
     let false_case = if args.len() == 3 {args[2].clone()} else {LangVal::Nil};
 
-    match eval(args[0].clone(), env)? {
+    match eval(args[0].clone(), env.clone())? {
         LangVal::Boolean(b) => {
             if b {
-                Ok(eval(true_case, env)?)
+                Ok(eval(true_case, env.clone())?)
             } else {
-                Ok(eval(false_case, env)?)
+                Ok(eval(false_case, env.clone())?)
             }
         }
-        LangVal::Nil => Ok(eval(false_case, env)?),
+        LangVal::Nil => Ok(eval(false_case, env.clone())?),
         _ => Err("if expected a boolean as first argument")?
     }
 }
 
-fn fn_eq(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_eq(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     if args.len() != 2 {
         Err(format!("= expected exactly 2 arguments, got {}", args.len()))?;
     }
@@ -236,7 +234,7 @@ fn fn_eq(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
     }
 }
 
-fn fn_fn(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
+fn fn_fn(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     if args.len() != 2 {
         Err(format!("fn* expected exactly 2 arguments, got {}", args.len()))?;
     }
@@ -265,26 +263,26 @@ fn fn_fn(args: Vec<LangVal>, env: &mut FullEnv) -> Result<LangVal> {
     })
 }
 
-pub fn make_core_env() -> FullEnv {
-    let mut ret = FullEnv::new();
+pub fn make_core_env() -> Env {
+    let mut ret = env_push(None);
 
     // normal functions
-    ret.set("+".to_string(), LangVal::Function(add));
-    ret.set("*".to_string(), LangVal::Function(multiply));
-    ret.set("-".to_string(), LangVal::Function(subtract));
-    ret.set("/".to_string(), LangVal::Function(divide));
-    ret.set("list".to_string(), LangVal::Function(fn_list));
-    ret.set("list?".to_string(), LangVal::Function(fn_list_q));
-    ret.set("empty?".to_string(), LangVal::Function(fn_empty_q));
-    ret.set("count".to_string(), LangVal::Function(fn_count));
-    ret.set("=".to_string(), LangVal::Function(fn_eq));
+    env_set(&ret, "+", LangVal::Function(add));
+    env_set(&ret, "*", LangVal::Function(multiply));
+    env_set(&ret, "-", LangVal::Function(subtract));
+    env_set(&ret, "/", LangVal::Function(divide));
+    env_set(&ret, "list", LangVal::Function(fn_list));
+    env_set(&ret, "list?", LangVal::Function(fn_list_q));
+    env_set(&ret, "empty?", LangVal::Function(fn_empty_q));
+    env_set(&ret, "count", LangVal::Function(fn_count));
+    env_set(&ret, "=", LangVal::Function(fn_eq));
 
     // special functions
-    ret.set("def!".to_string(), LangVal::SpecialFunction(fn_def));
-    ret.set("let*".to_string(), LangVal::SpecialFunction(fn_let));
-    ret.set("do".to_string(), LangVal::SpecialFunction(fn_do));
-    ret.set("if".to_string(), LangVal::SpecialFunction(fn_if));
-    ret.set("fn*".to_string(), LangVal::SpecialFunction(fn_fn));
+    env_set(&ret, "def!", LangVal::SpecialFunction(fn_def));
+    env_set(&ret, "let*", LangVal::SpecialFunction(fn_let));
+    env_set(&ret, "do", LangVal::SpecialFunction(fn_do));
+    env_set(&ret, "if", LangVal::SpecialFunction(fn_if));
+    env_set(&ret, "fn*", LangVal::SpecialFunction(fn_fn));
 
     ret
 }
