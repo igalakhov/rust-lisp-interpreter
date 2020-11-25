@@ -1,7 +1,5 @@
 use crate::types::{LangVal, Result, Hashmap, Env, env_push, env_set, env_get};
 use itertools::zip;
-use std::rc::Rc;
-use std::borrow::Borrow;
 
 pub fn eval(val: LangVal, env: Env) -> Result<LangVal> {
     match val {
@@ -23,10 +21,12 @@ pub fn eval(val: LangVal, env: Env) -> Result<LangVal> {
                     LangVal::DefinedFunction {
                         symbols,
                         ast,
-                        env: other_env
+                        env: other_env,
+                        min_args,
+                        is_variadic,
                     } => {
                         let args = eval_ast(LangVal::List(args), env.clone())?.try_list().unwrap();
-                        eval_defined(args, symbols, ast, &mut other_env.clone())
+                        eval_defined(args, symbols, ast, min_args, is_variadic, &mut other_env.clone())
                     }
                     _ => {
                         Err("Expected function as first argument")?
@@ -75,17 +75,30 @@ pub fn eval_ast(val: LangVal, env: Env) -> Result<LangVal> {
     }
 }
 
-fn eval_defined(args: Vec<LangVal>, symbols: Vec<String>, ast: Box<LangVal>, env: &Env)
+fn eval_defined(args: Vec<LangVal>, symbols: Vec<String>, ast: Box<LangVal>,
+                min_args: usize, is_variadic: bool, env: &Env)
 -> Result<LangVal> {
-
-    if args.len() != symbols.len() {
-        Err("function got wrong number of arguments")?;
+    if is_variadic {
+        if args.len() < min_args {
+            Err(format!("function expected at least {} arguments, got {}", min_args, args.len()))?;
+        }
+    } else {
+        if args.len() != min_args {
+            Err(format!("function expected {} arguments, got {}", min_args, args.len()))?;
+        }
     }
 
     let env = env_push(Some(env.clone()));
 
-    for (i, j) in zip(symbols, args) {
-        env_set(&env, &i, j);
+    if is_variadic {
+        for i in 0..(min_args) {
+            env_set(&env, &symbols[i], args[i].clone());
+        }
+        env_set(&env, &symbols[min_args], LangVal::List(args[(min_args)..].to_vec()));
+    } else {
+        for (i, j) in zip(symbols, args) {
+            env_set(&env, &i, j);
+        }
     }
 
     let ret = eval(*(ast.clone()), env.clone());

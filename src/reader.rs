@@ -3,6 +3,7 @@ use crate::types::{Result, LangVal};
 use std::rc::Rc;
 use std::collections::HashMap;
 use itertools::Itertools;
+use regex::Captures;
 
 #[derive(Debug, Clone)]
 struct Reader {
@@ -50,6 +51,15 @@ pub fn tokenize(str: &str) -> Result<Vec<String>> {
 
     Ok(res)
 }
+fn unescape_str(s: &str) -> String {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r#"\\(.)"#).unwrap();
+    }
+    RE.replace_all(&s, |caps: &Captures| {
+        format!("{}", if &caps[1] == "n" { "\n" } else { &caps[1] })
+    })
+        .to_string()
+}
 
 fn read_atomic(reader: &mut Reader) -> Result<LangVal> {
 
@@ -71,13 +81,13 @@ fn read_atomic(reader: &mut Reader) -> Result<LangVal> {
         return Ok(LangVal::Boolean(false));
     }
     if token.starts_with(":") {
-        return Ok(LangVal::String(token));
+        return Ok(LangVal::String(format!("\u{29e}{}", &token[1..]).to_string()));
     }
     if NUM_RE.is_match(&token) {
         return Ok(LangVal::Number(token.parse()?));
     }
     if STR_RE.is_match(&token) {
-        return Ok(LangVal::String(token)); // TODO: parse the newlins, etc.
+        return Ok(LangVal::String(unescape_str(&token[1..(token.len()-1)])));
     }
     if token.starts_with("\"") {
         Err("Unexpected \" (unbalanced string literal)")?;

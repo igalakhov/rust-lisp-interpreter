@@ -24,6 +24,8 @@ pub enum LangVal {
         symbols: Vec<String>,
         ast: Box<LangVal>,
         env: Env,
+        min_args: usize,
+        is_variadic: bool
     },
     // quotes, etc
     WithSpecial((String, Rc<LangVal>))
@@ -46,7 +48,6 @@ impl LangVal {
 }
 
 // environment implementation
-#[derive()]
 pub struct EnvStruct {
     data: RefCell<std::collections::HashMap<String, LangVal>>,
     outer: Option<Env>

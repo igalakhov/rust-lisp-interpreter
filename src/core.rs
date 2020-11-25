@@ -2,10 +2,7 @@ use crate::types::{LangVal, Result, Env, env_push, env_set};
 use crate::eval::{eval, eval_ast};
 use crate::reader;
 use itertools::{Itertools, zip};
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::env;
-use std::rc::Rc;
+use crate::printer::pr_str;
 
 fn add(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     let mut res: f64 = 0.0;
@@ -184,7 +181,8 @@ fn fn_empty_q(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
         Err(format!("empty? expected 1 argument, got {}", args.len()))?;
     }
     match &args[0] {
-        LangVal::List(v) => Ok(LangVal::Boolean(v.len() == 0)),
+        LangVal::List(v)|
+        LangVal::Vector(v) => Ok(LangVal::Boolean(v.len() == 0)),
         _ => Err("empty? expected a list")?
     }
 }
@@ -194,7 +192,8 @@ fn fn_count(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
         Err(format!("count expected 1 argument, got {}", args.len()))?;
     }
     match &args[0] {
-        LangVal::List(v) => Ok(LangVal::Number(v.len() as f64)),
+        LangVal::List(v)|
+        LangVal::Vector(v) => Ok(LangVal::Number(v.len() as f64)),
         LangVal::Nil => Ok(LangVal::Number(0.0)),
         _ => Err("count expected a list")?
     }
@@ -229,6 +228,9 @@ fn fn_if(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
         LangVal::List(_)|LangVal::Vector(_) => {
             Ok(eval(true_case, env.clone())?)
         }
+        LangVal::String(_) => {
+            Ok(eval(true_case, env.clone())?)
+        }
         LangVal::Nil => Ok(eval(false_case, env.clone())?),
         _ => Err("if expected a boolean as first argument")?
     }
@@ -244,7 +246,10 @@ fn fn_eq(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
         (LangVal::Boolean(a), LangVal::Boolean(b)) => Ok(LangVal::Boolean(a == b)),
         (LangVal ::String(a), LangVal::String(b))=> Ok(LangVal::Boolean(a == b)),
         (LangVal::Nil, LangVal::Nil) => Ok(LangVal::Boolean(true)),
-        (LangVal::List(v1), LangVal::List(v2)) => {
+        (LangVal::List(v1), LangVal::List(v2))|
+        (LangVal::Vector(v1), LangVal::Vector(v2))|
+        (LangVal::Vector(v1), LangVal::List(v2))|
+        (LangVal::List(v1), LangVal::Vector(v2)) => {
             if v1.len() != v2.len() {
                 return Ok(LangVal::Boolean(false))
             }
@@ -275,19 +280,42 @@ fn fn_fn(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
         Err(format!("fn* expected exactly 2 arguments, got {}", args.len()))?;
     }
 
-    if args[0].clone().try_list().is_none() {
-        Err("fn* expected list of symbols as first argument")?;
-    }
-
     let mut symbols = vec![];
 
-    for i in args[0].clone().try_list().unwrap() {
-        match i {
-            LangVal::Symbol(s) => {
-                symbols.push(s);
+    match &args[0] {
+        LangVal::List(v)|LangVal::Vector(v) => {
+            for i in v {
+                match i {
+                    LangVal::Symbol(s) => {
+                        symbols.push(s.clone());
+                    }
+                    _ => Err("fn* expected list of symbols as first argument")?
+                }
             }
-            _ => Err("fn* expected list of symbols as first argument")?
         }
+        _ => Err("fn* expected list of symbols as first argument")?
+    }
+
+    let mut is_variadic = false;
+    let mut min_args = symbols.len();
+    let mut new_symbols = vec![];
+
+    // check variadic
+    for i in 0..symbols.len() {
+        if symbols[i] == "&" {
+            if is_variadic {
+                Err("& only allowed to be used once in function signature")?;
+            }
+
+            is_variadic = true;
+            min_args = i;
+        } else {
+            new_symbols.push(symbols[i].clone());
+        }
+    }
+
+    if is_variadic {
+        symbols = new_symbols;
     }
 
     let ast = args[1].clone();
@@ -295,8 +323,46 @@ fn fn_fn(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     Ok(LangVal::DefinedFunction {
         symbols,
         ast: Box::new(ast),
-        env: env.clone()
+        env: env.clone(),
+        min_args,
+        is_variadic,
     })
+}
+
+fn fn_pr_str(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
+    let s = args.into_iter().map(|x| {
+        pr_str(&x, true)
+    }).join(" ");
+
+    Ok(LangVal::String(s))
+}
+
+fn fn_str(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
+    let s = args.into_iter().map(|x| {
+        pr_str(&x, false)
+    }).join("");
+
+    Ok(LangVal::String(s))
+}
+
+fn fn_prn(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
+    let s = args.into_iter().map(|x| {
+        pr_str(&x, true)
+    }).join(" ");
+
+    println!("{}", s);
+
+    Ok(LangVal::Nil)
+}
+
+fn fn_println(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
+    let s = args.into_iter().map(|x| {
+        pr_str(&x, false)
+    }).join(" ");
+
+    println!("{}", s);
+
+    Ok(LangVal::Nil)
 }
 
 pub fn make_core_env() -> Env {
@@ -313,6 +379,10 @@ pub fn make_core_env() -> Env {
     env_set(&ret, "count", LangVal::Function(fn_count));
     env_set(&ret, "=", LangVal::Function(fn_eq));
     env_set(&ret, ">", LangVal::Function(fn_greater));
+    env_set(&ret, "pr-str", LangVal::Function(fn_pr_str));
+    env_set(&ret, "str", LangVal::Function(fn_str));
+    env_set(&ret, "prn", LangVal::Function(fn_prn));
+    env_set(&ret, "println", LangVal::Function(fn_println));
 
     // special functions
     env_set(&ret, "def!", LangVal::SpecialFunction(fn_def));
@@ -334,7 +404,7 @@ pub fn make_core_env() -> Env {
     ];
 
     for def in defns {
-        eval(reader::read_str(def).unwrap(), ret.clone());
+        eval(reader::read_str(def).unwrap(), ret.clone()).unwrap();
     }
 
     ret
