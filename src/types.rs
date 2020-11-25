@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::rc::Rc;
+use std::cell::RefCell;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub type Hashmap = std::collections::HashMap<String, LangVal>;
-pub type Env = std::collections::HashMap<String, LangVal>;
-pub type LangFunction = fn(Vec<LangVal>, &mut FullEnv) -> Result<LangVal>;
+pub type LangFunction = fn(Vec<LangVal>, Env) -> Result<LangVal>;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -23,7 +23,7 @@ pub enum LangVal {
     DefinedFunction {
         symbols: Vec<String>,
         ast: Box<LangVal>,
-        env: FullEnv, // defined function needs to remember its environment
+        env: Env,
     },
     // quotes, etc
     WithSpecial((String, Rc<LangVal>))
@@ -42,72 +42,48 @@ impl LangVal {
     }
 }
 
-// slightly better implementation to ensure O(1) for most operations
+// environment implementation
+#[derive()]
+pub struct EnvStruct {
+    data: RefCell<std::collections::HashMap<String, LangVal>>,
+    outer: Option<Env>
+}
+pub type Env = Rc<EnvStruct>;
 
-
-#[derive(Clone, Default)]
-#[allow(dead_code)]
-pub struct FullEnv {
-    nodes: Vec<Env>,
-    size: usize
+pub fn env_push(outer: Option<Env>) -> Env {
+    Rc::new(EnvStruct {
+        data: RefCell::new(Default::default()),
+        outer
+    })
 }
 
-#[allow(dead_code)]
-impl FullEnv {
-
-    pub fn new() -> FullEnv {
-        FullEnv {
-            nodes: vec![Default::default()],
-            size: 1
-        }
-    }
-
-    pub fn push(&mut self) { // add a new "top" environment
-        self.nodes.push(Default::default());
-        self.size += 1;
-    }
-
-    pub fn pop(&mut self) { // get rid of the "top" environment
-        if self.size == 1 {
-            panic!("Cannot pop an env of size 1");
-        }
-        self.nodes.pop();
-        self.size -= 1;
-    }
-
-    pub fn set(&mut self, key: String, val: LangVal) {
-        self.nodes[self.size-1].insert(key, val);
-    }
-
-    pub fn get(&self, val: &LangVal) -> Result<LangVal> {
-        match val {
-            LangVal::Symbol(s) => self.get_str(s),
-            _ => Err("Cannot lookup non-symbol")?
-        }
-    }
-
-    pub fn get_str(&self, val: &String) -> Result<LangVal> {
-        let env = self.find_str(val)?;
-
-        Ok(env.get(val).unwrap().clone())
-    }
-    pub fn find(&self, val: &LangVal) -> Result<&Env> {
-        match val {
-            LangVal::Symbol(s) => self.find_str(s),
-            _ => Err("Cannot lookup non-symbol")?
-        }
-    }
-
-    pub fn find_str(&self, val: &String) -> Result<&Env> {
-        for i in (0..self.size).rev() {
-            if self.nodes[i].contains_key(val) {
-                return Ok(&self.nodes[i]);
-            }
-        }
-
-        Err(format!("Symbol {} not found", val))?
+pub fn env_find(env: &Env, key: &String) -> Option<Env> {
+    match (env.data.borrow().contains_key(key), env.outer.clone()) {
+        (true, _) => Some(env.clone()),
+        (false, Some(outer)) => env_find(&outer, key),
+        _ => None
     }
 }
+
+pub fn env_get(env: &Env, key: &String) -> Result<LangVal> {
+    let found = env_find(env, key);
+    match found {
+        Some(env) =>
+            Ok(env.data
+                .borrow()
+                .get(key)
+                .unwrap()
+                .clone()),
+        None => Err(format!("Symbol {} not found", key))?
+    }
+}
+
+pub fn env_set(env: &Env, key: &str, val: LangVal) {
+    env.data.borrow_mut().insert(key.to_string(), val);
+}
+
+
+
 
 
 
