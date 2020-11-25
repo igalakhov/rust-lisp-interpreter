@@ -28,6 +28,9 @@ impl Reader {
 }
 
 pub fn tokenize(str: &str) -> Result<Vec<String>> {
+    if str.starts_with(";;") { // ignore lines that start with ;; for comments
+        return Ok(vec![]);
+    }
 
     lazy_static! {
         static ref PARSE_RE: Regex = Regex::new(
@@ -39,7 +42,7 @@ pub fn tokenize(str: &str) -> Result<Vec<String>> {
     let mut res = vec![];
 
     for cap in PARSE_RE.captures_iter(str) {
-        if cap[1].starts_with(";") { // comments
+        if cap[1].starts_with(";") { // in line comment
             continue;
         }
         res.push(String::from(&cap[1]));

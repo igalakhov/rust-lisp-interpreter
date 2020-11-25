@@ -11,9 +11,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 
-#[tokio::main]
-pub async fn main() {
-
+fn main() {
     // main input/output loop
     let mut rl = Editor::<()>::new();
 

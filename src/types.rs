@@ -40,6 +40,9 @@ impl LangVal {
     pub fn try_symbol(self) -> Option<String> {
         if let LangVal::Symbol(v) = self { Some(v) } else { None }
     }
+    pub fn try_boolean(self) -> Option<bool> {
+        if let LangVal::Boolean(v) = self { Some(v) } else { None }
+    }
 }
 
 // environment implementation

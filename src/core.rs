@@ -1,6 +1,10 @@
 use crate::types::{LangVal, Result, Env, env_push, env_set};
 use crate::eval::{eval, eval_ast};
+use crate::reader;
 use itertools::{Itertools, zip};
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::env;
 use std::rc::Rc;
 
 fn add(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
@@ -214,6 +218,16 @@ fn fn_if(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
             } else {
                 Ok(eval(false_case, env.clone())?)
             }
+        },
+        LangVal::Number(n) => {
+            if n == 0.0 {
+                Ok(eval(true_case, env.clone())?)
+            } else {
+                Ok(eval(false_case, env.clone())?)
+            }
+        }
+        LangVal::List(_)|LangVal::Vector(_) => {
+            Ok(eval(true_case, env.clone())?)
         }
         LangVal::Nil => Ok(eval(false_case, env.clone())?),
         _ => Err("if expected a boolean as first argument")?
@@ -230,7 +244,29 @@ fn fn_eq(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
         (LangVal::Boolean(a), LangVal::Boolean(b)) => Ok(LangVal::Boolean(a == b)),
         (LangVal ::String(a), LangVal::String(b))=> Ok(LangVal::Boolean(a == b)),
         (LangVal::Nil, LangVal::Nil) => Ok(LangVal::Boolean(true)),
+        (LangVal::List(v1), LangVal::List(v2)) => {
+            if v1.len() != v2.len() {
+                return Ok(LangVal::Boolean(false))
+            }
+            for (i, j) in zip(v1, v2) {
+                if !fn_eq(vec![i.clone(), j.clone()], env.clone())?.try_boolean().unwrap() {
+                    return Ok(LangVal::Boolean(false));
+                }
+            }
+            Ok(LangVal::Boolean(true))
+        }
         (_, _) => Ok(LangVal::Boolean(false))
+    }
+}
+
+fn fn_greater(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
+    if args.len() != 2 {
+        Err(format!("> expected exactly 2 arguments, got {}", args.len()))?;
+    }
+
+    match (&args[0], &args[1]) {
+        (LangVal::Number(a), LangVal::Number(b)) => Ok(LangVal::Boolean(a > b)),
+        (_, _) => Err("Cannot compare given values")?
     }
 }
 
@@ -264,7 +300,7 @@ fn fn_fn(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
 }
 
 pub fn make_core_env() -> Env {
-    let mut ret = env_push(None);
+    let ret = env_push(None);
 
     // normal functions
     env_set(&ret, "+", LangVal::Function(add));
@@ -276,6 +312,7 @@ pub fn make_core_env() -> Env {
     env_set(&ret, "empty?", LangVal::Function(fn_empty_q));
     env_set(&ret, "count", LangVal::Function(fn_count));
     env_set(&ret, "=", LangVal::Function(fn_eq));
+    env_set(&ret, ">", LangVal::Function(fn_greater));
 
     // special functions
     env_set(&ret, "def!", LangVal::SpecialFunction(fn_def));
@@ -283,6 +320,22 @@ pub fn make_core_env() -> Env {
     env_set(&ret, "do", LangVal::SpecialFunction(fn_do));
     env_set(&ret, "if", LangVal::SpecialFunction(fn_if));
     env_set(&ret, "fn*", LangVal::SpecialFunction(fn_fn));
+
+    // functions defined using the language itself
+    let defns = vec![
+        // boolean functions
+        "(def! not (fn* (a) (if a false true)))",
+        "(def! or (fn* (a b) (if a true (if b true false))))",
+        "(def! and (fn* (a b) (if a (if b true false) false)))",
+        // comparisons
+        "(def! >= (fn* (a b) (or (= a b) (> a b))))",
+        "(def! < (fn* (a b) (not (>= a b))))",
+        "(def! <= (fn* (a b) (not (> a b))))",
+    ];
+
+    for def in defns {
+        eval(reader::read_str(def).unwrap(), ret.clone());
+    }
 
     ret
 }
