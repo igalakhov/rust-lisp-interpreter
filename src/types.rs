@@ -5,6 +5,7 @@ use std::cell::RefCell;
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub type Hashmap = std::collections::HashMap<String, LangVal>;
 pub type LangFunction = fn(Vec<LangVal>, Env) -> Result<LangVal>;
+pub type TCOFunction = fn(Vec<LangVal>, Env) -> Result<(LangVal, Env)>;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -20,6 +21,7 @@ pub enum LangVal {
     Hashmap(Hashmap),
     Function(LangFunction),
     SpecialFunction(LangFunction), // functions where arguments are given in raw and unevaluated
+    TCOFunction(TCOFunction), // TCO optimized function that needs to be directly implemented in the loop
     DefinedFunction {
         symbols: Vec<String>,
         ast: Box<LangVal>,

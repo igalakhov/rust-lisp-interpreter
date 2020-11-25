@@ -47,6 +47,7 @@ pub fn pr_str(val: &LangVal, readable: bool) -> String {
         }
         LangVal::Function(_)|
         LangVal::SpecialFunction(_)|
+        LangVal::TCOFunction(_)|
         LangVal::DefinedFunction {symbols: _, ast: _, env: _, is_variadic: _, min_args: _} => {
             "<function>".to_string()
         }

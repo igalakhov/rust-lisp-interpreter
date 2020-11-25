@@ -121,7 +121,7 @@ fn fn_def(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     }
 }
 
-fn fn_let(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
+fn fn_let(args: Vec<LangVal>, env: Env) -> Result<(LangVal, Env)> {
     if args.len() != 2 {
         Err(format!("let* expected 2 arguments, got {}", args.len()))?
     }
@@ -147,19 +147,21 @@ fn fn_let(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
         fn_def(vec![k, v], env.clone())?;
     }
 
-    let ret = eval(args[1].clone(), env.clone())?;
-
-    Ok(ret)
+    Ok((args[1].clone(), env))
 }
 
-fn fn_do(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
+fn fn_do(args: Vec<LangVal>, env: Env) -> Result<(LangVal, Env)> {
     let n = args.len();
 
     if n == 0 {
         Err("do expected at least 1 argument, got 0")?;
     }
 
-    Ok(eval_ast(LangVal::List(args), env)?.try_list().unwrap()[n-1].clone())
+    // evaluate the first n-1 arguments
+    eval_ast(LangVal::List(args[..(args.len()-1)].to_vec()), env.clone())?;
+
+
+    Ok((args[args.len()-1].clone(), env))
 }
 
 fn fn_list(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
@@ -199,7 +201,7 @@ fn fn_count(args: Vec<LangVal>, _: Env) -> Result<LangVal> {
     }
 }
 
-fn fn_if(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
+fn fn_if(args: Vec<LangVal>, env: Env) -> Result<(LangVal, Env)> {
     if args.len() < 2 {
         Err(format!("if expected at least 2 arguments, got {}", args.len()))?;
     }
@@ -213,25 +215,21 @@ fn fn_if(args: Vec<LangVal>, env: Env) -> Result<LangVal> {
     match eval(args[0].clone(), env.clone())? {
         LangVal::Boolean(b) => {
             if b {
-                Ok(eval(true_case, env.clone())?)
+                Ok((true_case, env))
             } else {
-                Ok(eval(false_case, env.clone())?)
+                Ok((false_case, env))
             }
         },
-        LangVal::Number(n) => {
-            if n == 0.0 {
-                Ok(eval(true_case, env.clone())?)
-            } else {
-                Ok(eval(false_case, env.clone())?)
-            }
+        LangVal::Number(_) => {
+            Ok((true_case, env))
         }
         LangVal::List(_)|LangVal::Vector(_) => {
-            Ok(eval(true_case, env.clone())?)
+            Ok((true_case, env))
         }
         LangVal::String(_) => {
-            Ok(eval(true_case, env.clone())?)
+            Ok((true_case, env))
         }
-        LangVal::Nil => Ok(eval(false_case, env.clone())?),
+        LangVal::Nil => Ok((false_case, env)),
         _ => Err("if expected a boolean as first argument")?
     }
 }
@@ -386,9 +384,9 @@ pub fn make_core_env() -> Env {
 
     // special functions
     env_set(&ret, "def!", LangVal::SpecialFunction(fn_def));
-    env_set(&ret, "let*", LangVal::SpecialFunction(fn_let));
-    env_set(&ret, "do", LangVal::SpecialFunction(fn_do));
-    env_set(&ret, "if", LangVal::SpecialFunction(fn_if));
+    env_set(&ret, "let*", LangVal::TCOFunction(fn_let));
+    env_set(&ret, "do", LangVal::TCOFunction(fn_do));
+    env_set(&ret, "if", LangVal::TCOFunction(fn_if));
     env_set(&ret, "fn*", LangVal::SpecialFunction(fn_fn));
 
     // functions defined using the language itself
