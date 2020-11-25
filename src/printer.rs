@@ -15,7 +15,10 @@ pub fn to_string(val: &LangVal) -> String {
 
     match val {
         LangVal::Nil => {
-            "".to_string()
+            "nil".to_string()
+        }
+        LangVal::Boolean(b) => {
+            if *b { "true".to_string() } else { "false".to_string() }
         }
         LangVal::List(vals) => {
             format!("({})", fmt(vals))
@@ -34,11 +37,10 @@ pub fn to_string(val: &LangVal) -> String {
                 format!("{} {}", k, to_string(v))
             }).collect::<Vec<String>>().join(" "))
         }
-        LangVal::Function(_) => {
+        LangVal::Function(_)|
+        LangVal::SpecialFunction(_)|
+        LangVal::DefinedFunction {symbols: _, ast: _, env: _} => {
             "<function>".to_string()
-        }
-        LangVal::SpecialFunction(_) => {
-            "<special function>".to_string()
         }
         LangVal::WithSpecial((name, val)) => {
             format!("({} {})", name, to_string(val))

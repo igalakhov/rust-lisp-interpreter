@@ -57,7 +57,16 @@ fn read_atomic(reader: &mut Reader) -> Result<LangVal> {
 
     let token = reader.next()?;
 
-    // possible cases that an atomic could be
+    // cases
+    if token == "nil" {
+        return Ok(LangVal::Nil)
+    }
+    if token == "true" {
+        return Ok(LangVal::Boolean(true));
+    }
+    if token == "false" {
+        return Ok(LangVal::Boolean(false));
+    }
     if token.starts_with(":") {
         return Ok(LangVal::String(token));
     }

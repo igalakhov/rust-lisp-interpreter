@@ -1,4 +1,7 @@
 use crate::types::{LangVal, FullEnv, Result, Hashmap};
+use itertools::zip;
+use std::rc::Rc;
+use std::borrow::Borrow;
 
 pub fn eval(val: LangVal, env: &mut FullEnv) -> Result<LangVal> {
     match val {
@@ -6,7 +9,7 @@ pub fn eval(val: LangVal, env: &mut FullEnv) -> Result<LangVal> {
             if to_eval.len() == 0 {
                 Ok(LangVal::List(vec![]))
             } else {
-                let func = eval_ast(to_eval[0].clone(), env)?;
+                let func = eval(to_eval[0].clone(), env)?;
                 let args = to_eval[1..].to_vec();
 
                 match func { // need to know if we should evaluate args or not
@@ -16,6 +19,14 @@ pub fn eval(val: LangVal, env: &mut FullEnv) -> Result<LangVal> {
                     }
                     LangVal::SpecialFunction(f) => {
                         f(args, env)
+                    }
+                    LangVal::DefinedFunction {
+                        symbols,
+                        ast,
+                        env: other_env
+                    } => {
+                        let args = eval_ast(LangVal::List(args), env)?.try_list().unwrap();
+                        eval_defined(args, symbols, ast, &mut other_env.clone())
                     }
                     _ => {
                         Err("Expected function as first argument")?
@@ -62,4 +73,24 @@ pub fn eval_ast(val: LangVal, env: &mut FullEnv) -> Result<LangVal> {
         }
         _ => Ok(val)
     }
+}
+
+fn eval_defined(args: Vec<LangVal>, symbols: Vec<String>, ast: Box<LangVal>, env: &mut FullEnv)
+-> Result<LangVal> {
+
+    if args.len() != symbols.len() {
+        Err("function got wrong number of arguments")?;
+    }
+
+    env.push();
+
+    for (i, j) in zip(symbols, args) {
+        env.set(i, j);
+    }
+
+    let ret = eval(*(ast.clone()), env);
+
+    env.pop();
+
+    ret
 }

@@ -11,6 +11,7 @@ pub type LangFunction = fn(Vec<LangVal>, &mut FullEnv) -> Result<LangVal>;
 pub enum LangVal {
     // definitely gonna be used
     Nil,
+    Boolean(bool),
     List(Vec<LangVal>),
     Vector(Vec<LangVal>),
     Number(f64),
@@ -19,6 +20,11 @@ pub enum LangVal {
     Hashmap(Hashmap),
     Function(LangFunction),
     SpecialFunction(LangFunction), // functions where arguments are given in raw and unevaluated
+    DefinedFunction {
+        symbols: Vec<String>,
+        ast: Box<LangVal>,
+        env: FullEnv, // defined function needs to remember its environment
+    },
     // quotes, etc
     WithSpecial((String, Rc<LangVal>))
 }
